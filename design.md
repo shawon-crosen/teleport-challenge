@@ -1,0 +1,102 @@
+# Design Document
+
+Goal: Create an API to run arbitrary linux processes on a host utilizing a CLI
+High Level Overview
+
+The proposed solution will be divided into three parts:
+1. The server side library written in Go to interact with the Linux OS
+2. The gRPC API to take in requests from the client, use the server side library to run jobs, and return responses to the client
+3. The CLI that the client will use to send requests related to jobs to the API
+
+## Scope
+
+### In Scope
+* Starting a process
+* Terminating a process
+* Getting a process’s status
+* Streaming the output of a process 
+
+### Not in scope
+* Listing jobs
+* Stopping and restarting processes
+* Task resource management (CPU, memory, etc)
+* User management
+* Automated certificate creation
+
+## Approach
+The current approach for this project is to create something as simple and straightforward as possible. This means that I will not be using any external libraries or dependencies, and will try to leverage the Linux operating system’s existing tooling as much as possible instead of trying to reinvent the wheel. This design will cut a lot of corners and leave a lot of ideal functionality out of the initial implementation.
+
+## API
+The API will use gRPC to route requests from the client to the server. The API will run locally on the machine that is being managed from the client. 
+
+The API will accept POST requests for running processes and GET requests to return the status and output of a job. More detailed implementation details for the API can be found in the .proto document.
+
+At a high level the API will have the following routes:
+
+### POST
+`/processes/run`
+
+### GET
+`/processes/status/<pid>`
+`/processes/output/<pid>`
+
+The POST to run the command will return the process identifier for the command issued to the client, which will be used for the GET requests for status and output. 
+
+### Future Improvements
+* Run the server in a separate environment, such as kubernetes, which can allow for defining high availability through replicaSets and would move the API out from the domain of the operating system being managed
+* Utilize some kind of data store (relational or not) to track processes instead of relying on the pid
+* Include resource management of some kind to keep clients from over-taxing the operating system commands are running on
+
+## Server Authentication
+
+### mTLS
+The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a server side certificate and key pair. These certificates and keys will be stored locally for the server.
+
+The server will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
+
+### Scoping Requests
+In order to scope requests to each client we will create a temporary directory in /tmp for the username passed in from the client.
+
+#### Future Improvements
+* Use a certificate provider for the CA instead of a locally generate one
+* Utilize client certificate details to implement more fine grained access
+* Implement a dedicated secret management solution for private keys, such as Vault or AWS Secret Manager (or any other secure key store)
+* Automate certificate management going forward to remove human error and allow for easier revocation and rotation
+* Create actual users on the server to manage finer grained permissions for clients and derive the username from the client certificate
+* Add monitoring for certificate expiration and authentication failures
+
+### Library
+The library will primarily utilize the builtin os package in Go to interact with the Linux operating system and accomplish the actual job management functions.
+
+The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
+
+### Output streaming
+In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will then utilize the tail binary to read data from the file and provide it as a stream from the API. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection.
+
+#### Future Improvements
+* Store output somewhere other than locally on the server, like S3
+* Look into using an external lib that enables tailing from an external source
+* Utilize job management to allow suspending and resuming jobs instead of only being able to start and terminate them
+
+## CLI
+The CLI will utilize the [cobra](https://github.com/spf13/cobra) CLI library.
+
+### Run a process
+The basic structure of the run command will be `run <binary_name> [<args>] [<options>]`
+
+An example of running a process: `cmdctl run ls -la --user shawon`
+
+### Get process info
+The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<pid>] [<options>]`
+
+An example of querying for process status: `cmdctl get-status 47854 --user shawon`
+
+### Client Authentication
+The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. These certificates and keys will be stored locally for the client.
+
+The client will enforce TLS version 1.3 for maximum security. Each client will need a certificate and key pair generated to interact with the server.
+
+### Future Improvements
+* Create configuration options to allow more robust client side settings
+* Auto generate client certificates from the server instead of relying on users to generate their own
+* Clients should use the user specified in their cert instead of passing one in
