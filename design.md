@@ -33,15 +33,15 @@ The API will use gRPC to route requests from the client to the server. The API w
 
 The API will accept POST requests for running processes and GET requests to return the status and output of a job. More detailed implementation details for the API can be found in the .proto document.
 
-At a high level the API will have the following routes:
+At a high level the API will have the following methods on the localhost using port 9090:
 
-### POST
-`/processes/run`
-`/processes/stop/<pid>`
+### Run/Stop Methods
+`RunProcess(RunProcessRequest)`
+`StopProcess(StopProcessRequest)`
 
-### GET
-`/processes/status/<pid>`
-`/processes/output/<pid>`
+### Get Information Methods
+`GetProcessStatus(ProcessStatusRequest)`
+`GetProcessOutput(ProcessOutputRequest)`
 
 The POST to run the command will return the process identifier for the command issued to the client, which will be used for the GET requests for status and output.
 
