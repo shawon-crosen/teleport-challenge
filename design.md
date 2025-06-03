@@ -24,10 +24,12 @@ The proposed solution will be divided into three parts:
 * Automated certificate creation
 
 ## Approach
-The current approach for this project is to create something as simple and straightforward as possible. This means that I will not be using any external libraries or dependencies, and will try to leverage the Linux operating system’s existing tooling as much as possible instead of trying to reinvent the wheel. This design will cut a lot of corners and leave a lot of ideal functionality out of the initial implementation.
+The current approach for this project is to create something as simple and straightforward as possible. This means that I will not be using any external libraries or dependencies, and will try to leverage the Linux operating system’s existing tooling as much as possible instead of trying to reinvent the wheel. 
+
+This design will cut a lot of corners and leave a lot of ideal functionality out of the initial implementation. I have noted things that should be considered as `Future Improvements` in each section.
 
 ## API
-The API will use gRPC to route requests from the client to the server. The API will run locally on the machine that is being managed from the client. 
+The API will use gRPC to route requests from the client to the server. The API will run locally on the machine that is being managed from the client. We will have a single user on the machine we are running processes on named `processrunner`.
 
 The API will accept POST requests for running processes and GET requests to return the status and output of a job. More detailed implementation details for the API can be found in the .proto document.
 
@@ -35,17 +37,19 @@ At a high level the API will have the following routes:
 
 ### POST
 `/processes/run`
+`/processes/stop/<pid>`
 
 ### GET
 `/processes/status/<pid>`
 `/processes/output/<pid>`
 
-The POST to run the command will return the process identifier for the command issued to the client, which will be used for the GET requests for status and output. 
+The POST to run the command will return the process identifier for the command issued to the client, which will be used for the GET requests for status and output.
 
 ### Future Improvements
 * Run the server in a separate environment, such as kubernetes, which can allow for defining high availability through replicaSets and would move the API out from the domain of the operating system being managed
 * Utilize some kind of data store (relational or not) to track processes instead of relying on the pid
 * Include resource management of some kind to keep clients from over-taxing the operating system commands are running on
+* Scope processes to users that map back to the clients on the operating system
 
 ## Server Authentication
 
@@ -55,10 +59,10 @@ The service will utilize mTLS to authenticate and secure requests. For this impl
 The server will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
 
 ### Scoping Requests
-In order to scope requests to each client we will create a temporary directory in /tmp for the username passed in from the client.
+In order to scope requests to each client we will create a temporary directory in /tmp for the username passed in from the client, which will be where the output files are written to.
 
 #### Future Improvements
-* Use a certificate provider for the CA instead of a locally generate one
+* Use a certificate provider for the CA instead of a locally generating one
 * Utilize client certificate details to implement more fine grained access
 * Implement a dedicated secret management solution for private keys, such as Vault or AWS Secret Manager (or any other secure key store)
 * Automate certificate management going forward to remove human error and allow for easier revocation and rotation
@@ -71,7 +75,7 @@ The library will primarily utilize the builtin os package in Go to interact with
 The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
 
 ### Output streaming
-In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will then utilize the tail binary to read data from the file and provide it as a stream from the API. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection.
+In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will then use the tail binary to read data from the file and provide the output, leaning on the Linux built in's optimizations. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection.
 
 #### Future Improvements
 * Store output somewhere other than locally on the server, like S3
@@ -90,6 +94,9 @@ An example of running a process: `cmdctl run ls -la --user shawon`
 The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<pid>] [<options>]`
 
 An example of querying for process status: `cmdctl get-status 47854 --user shawon`
+
+We will also have commands for stopping a process and getting the process output. They will follow a similar structure as the above examples.
+
 
 ### Client Authentication
 The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. These certificates and keys will be stored locally for the client.
