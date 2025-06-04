@@ -28,9 +28,9 @@ The current approach for this project is to create something as simple and strai
 This design will cut a lot of corners and leave a lot of ideal functionality out of the initial implementation. I have noted things that should be considered as `Future Improvements` in each section.
 
 ## API
-The API will use gRPC to route requests from the client to the server. The API will run locally on the machine that is being managed from the client. We will have a single user on the machine we are running processes on named `processrunner`.
+The API will use gRPC to route requests from the client to the server. The API will run locally on the machine that is being managed from the client.
 
-The API will accept POST requests for running processes and GET requests to return the status and output of a job. More detailed implementation details for the API can be found in the .proto document.
+The API will accept requests for running processes as well as requests to return the status and output of a job. More detailed implementation details for the API can be found in the .proto document.
 
 At a high level the API will have the following methods on the localhost using port 9090:
 
@@ -42,7 +42,7 @@ At a high level the API will have the following methods on the localhost using p
 `GetProcessStatus(ProcessStatusRequest)`
 `GetProcessOutput(ProcessOutputRequest)`
 
-The POST to run the command will return the process identifier for the command issued to the client, which will be used for the GET requests for status and output.
+The `RunProcess` method will return the process identifier for the command issued to the client, which will be used for the `StopProcess`, `GetProcessStatus`, and `GetProcessOutput` methods.
 
 ### Future Improvements
 * Run the server in a separate environment, such as kubernetes, which can allow for defining high availability through replicaSets and would move the API out from the domain of the operating system being managed
@@ -58,7 +58,9 @@ The service will utilize mTLS to authenticate and secure requests. For this impl
 The server will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
 
 ### Scoping Requests
-In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client.
+In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client. The user on the host will match the first part of the email, before the `@`, which will be compared against the email we receive from the client. 
+
+The client will hard code this for now. Ideally this would be set via a configuration file. 
 
 #### Future Improvements
 * Use a certificate provider for the CA instead of a locally generating one
@@ -97,17 +99,23 @@ An example of querying for process status: `cmdctl get-status 47854`
 
 We will also have commands for stopping a process and getting the process output. They will follow a similar structure as the above examples.
 
+It is worth noting that using the pid is not ideal long term. Process ids can be reused by the host, which could mean returning incorrect output and statuses. For the scope of this challenge I felt that it would be unlikely to have this happen. Generating a unique identifier for each process and using that to track status and output would be a better long term solution.
 
 ### Client Authentication
-The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. The CA will be trusted by the server to allow client certificates to connect. These certificates and keys will be stored locally for the client.
+The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. The CA will use the `nameConstraints` extension to allow access only to a specific subdomain. In the case of this challenge it will be `permitted:.example.com`. The CA will be trusted by the server to allow client certificates to connect. These certificates and keys will be stored locally for the client.
 
 The client will enforce TLS version 1.3 for maximum security. Each client will need a certificate and key pair generated to interact with the server.
 
-When generating client certificates we will include the the user's identity and the principals on the host they have access to. These will be used as an additional layer of authentication server side to scope access to their user. 
+When generating client certificates we will include the the user's email, in the case of this challenge `shawon@example.com`, in the `subjectAltName` field. This will be used as an additional layer of authentication by the CA to ensure only users with an email matching the allowed subdomain can be validated. 
 
-Processes will be run as the user and log output will be stored under the user's home directory.
+Once the user has been validated their access will be scoped to allow the following on the host via group, which their user will be added to:
+* Execute binaries in `/usr/bin` and `/usr/local/bin`
+* Read/Write process output files from the output directory
+
+The user will not have access to read or write to any other directories, or to sudo or other groups.
 
 ### Future Improvements
 * Create configuration options to allow more robust client side settings
 * Auto generate client certificates from the server instead of relying on users to generate their own
 * Clients should use the user specified in their cert instead of passing one in
+* Utilize a 
