@@ -102,7 +102,7 @@ The service will utilize mTLS to authenticate and secure requests. For this impl
 
 The client will enforce TLS version 1.3 for maximum security. Each client will need a certificate and key pair generated to interact with the server.
 
-When generating client certificates we will use the `-I` flag to set the user's identity. We will also use the `-n` flag to scope the client's access to their corresponding user on the host.
+When generating client certificates we will include the the user's identity and the principals on the host they have access to. These will be used as an additional layer of authentication server side to scope access to their user. 
 
 Processes will be run as the user and log output will be stored under the user's home directory.
 
