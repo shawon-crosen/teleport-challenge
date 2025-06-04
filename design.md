@@ -73,7 +73,9 @@ The library will primarily utilize the builtin os package in Go to interact with
 The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
 
 ### Output streaming
-In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
+In order to reduce overhead each command will pipe output to a file named with the pid of the process. This data will be read from the file when requested. We will check to see if the process is still running to determine whether or not to continually read from and stream data from the file, or serve all the output data at once to the client. 
+
+In the cases where processes are still running we will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
 
 #### Future Improvements
 * Store output somewhere other than locally on the server, like S3
