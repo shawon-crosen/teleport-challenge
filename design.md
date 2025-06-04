@@ -20,7 +20,6 @@ The proposed solution will be divided into three parts:
 * Listing jobs
 * Stopping and restarting processes
 * Task resource management (CPU, memory, etc)
-* User management
 * Automated certificate creation
 
 ## Approach
