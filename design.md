@@ -58,14 +58,13 @@ The service will utilize mTLS to authenticate and secure requests. For this impl
 The server will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
 
 ### Scoping Requests
-In order to scope requests to each client we will create a temporary directory in /tmp for the username passed in from the client, which will be where the output files are written to.
+In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client.
 
 #### Future Improvements
 * Use a certificate provider for the CA instead of a locally generating one
 * Utilize client certificate details to implement more fine grained access
 * Implement a dedicated secret management solution for private keys, such as Vault or AWS Secret Manager (or any other secure key store)
 * Automate certificate management going forward to remove human error and allow for easier revocation and rotation
-* Create actual users on the server to manage finer grained permissions for clients and derive the username from the client certificate
 * Add monitoring for certificate expiration and authentication failures
 
 ### Library
@@ -74,7 +73,7 @@ The library will primarily utilize the builtin os package in Go to interact with
 The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
 
 ### Output streaming
-In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will then use the tail binary to read data from the file and provide the output, leaning on the Linux built in's optimizations. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection.
+In order to reduce overhead each command will pipe output to a file named with the pid of the process. We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
 
 #### Future Improvements
 * Store output somewhere other than locally on the server, like S3
@@ -85,22 +84,26 @@ In order to reduce overhead each command will pipe output to a file named with t
 The CLI will utilize the [cobra](https://github.com/spf13/cobra) CLI library.
 
 ### Run a process
-The basic structure of the run command will be `run <binary_name> [<args>] [<options>]`
+The basic structure of the run command will be `run <binary_name> [<args>]`
 
-An example of running a process: `cmdctl run ls -la --user shawon`
+An example of running a process: `cmdctl run ls -la`
 
 ### Get process info
-The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<pid>] [<options>]`
+The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<pid>]`
 
-An example of querying for process status: `cmdctl get-status 47854 --user shawon`
+An example of querying for process status: `cmdctl get-status 47854`
 
 We will also have commands for stopping a process and getting the process output. They will follow a similar structure as the above examples.
 
 
 ### Client Authentication
-The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. These certificates and keys will be stored locally for the client.
+The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. The CA will be trusted by the server to allow client certificates to connect. These certificates and keys will be stored locally for the client.
 
 The client will enforce TLS version 1.3 for maximum security. Each client will need a certificate and key pair generated to interact with the server.
+
+When generating client certificates we will include the the user's identity and the principals on the host they have access to. These will be used as an additional layer of authentication server side to scope access to their user. 
+
+Processes will be run as the user and log output will be stored under the user's home directory.
 
 ### Future Improvements
 * Create configuration options to allow more robust client side settings
