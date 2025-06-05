@@ -46,7 +46,7 @@ The `RunProcess` method will return the process identifier for the command issue
 
 ### Future Improvements
 * Run the server in a separate environment, such as kubernetes, which can allow for defining high availability through replicaSets and would move the API out from the domain of the operating system being managed
-* Utilize some kind of data store (relational or not) to track processes instead of relying on the pid
+* Utilize some kind of data store (relational or not) to track processes instead of relying on files
 * Include resource management of some kind to keep clients from over-taxing the operating system commands are running on
 * Scope processes to users that map back to the clients on the operating system
 
@@ -75,7 +75,7 @@ The library will primarily utilize the builtin os package in Go to interact with
 The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
 
 ### Output streaming
-In order to reduce overhead each command will pipe output to a file named with the pid of the process. This data will be read from the file when requested. We will check to see if the process is still running to determine whether or not to continually read from and stream data from the file, or serve all the output data at once to the client. 
+In order to reduce overhead each command will pipe output to a file named with the a unique identifier tied to the process. This data will be read from the file when requested. We will check to see if the process is still running to determine whether or not to continually read from and stream data from the file, or serve all the output data at once to the client. 
 
 In the cases where processes are still running we will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
 
@@ -93,13 +93,13 @@ The basic structure of the run command will be `run <binary_name> [<args>]`
 An example of running a process: `cmdctl run ls -la`
 
 ### Get process info
-The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<pid>]`
+The basic structure of the get-status and get-output retrieval commands will be: `get-status/get-output [<unique_process_id>]`
 
-An example of querying for process status: `cmdctl get-status 47854`
+An example of querying for process status: `cmdctl get-status shawon-ls-idhhyqm`
 
 We will also have commands for stopping a process and getting the process output. They will follow a similar structure as the above examples.
 
-It is worth noting that using the pid is not ideal long term. Process ids can be reused by the host, which could mean returning incorrect output and statuses. For the scope of this challenge I felt that it would be unlikely to have this happen. Generating a unique identifier for each process and using that to track status and output would be a better long term solution.
+We will generate a unique identifier for each process, using the username and a generated value, and write the pid to a file named with that id. This way we can track client processes without collisions, while still having something that ties back to the process itself on the host.
 
 ### Client Authentication
 The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. The CA will use the `nameConstraints` extension to allow access only to a specific subdomain. In the case of this challenge it will be `permitted:.example.com`. The CA will be trusted by the server to allow client certificates to connect. These certificates and keys will be stored locally for the client.

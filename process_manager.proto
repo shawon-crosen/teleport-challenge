@@ -15,11 +15,11 @@ message RunProcessRequest {
 }
 
 message RunProcessResponse {
-    int32 pid = 1;
+    string processId = 1;
 }
 
 message StopProcessRequest {
-    int32 pid = 1;
+    string processId = 1;
 }
 
 message StopProcessResponse {
@@ -27,7 +27,7 @@ message StopProcessResponse {
 }
 
 message ProcessStatusRequest {
-    int32 pid = 1;
+    string processId = 1;
 }
 
 message ProcessStatusResponse {
@@ -35,7 +35,7 @@ message ProcessStatusResponse {
 }
 
 message ProcessOutputRequest {
-    int32 pid = 1;
+    string processId = 1;
     string user = 2;
 }
 
