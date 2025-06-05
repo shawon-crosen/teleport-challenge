@@ -20,6 +20,7 @@ message RunProcessResponse {
 
 message StopProcessRequest {
     string processId = 1;
+    string user = 2;
 }
 
 message StopProcessResponse {
@@ -28,6 +29,7 @@ message StopProcessResponse {
 
 message ProcessStatusRequest {
     string processId = 1;
+    string user = 2;
 }
 
 message ProcessStatusResponse {
