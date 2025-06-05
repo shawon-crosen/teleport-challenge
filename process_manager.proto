@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package processmanager;
+
+service ProcessManager {
+    rpc RunProcess(RunProcessRequest) returns (RunProcessResponse);
+    rpc StopProcess(StopProcessRequest) returns (StopProcessResponse);
+    rpc GetProcessStatus(ProcessStatusRequest) returns (ProcessStatusResponse);
+    rpc GetProcessOutput(ProcessOutputRequest) returns (stream ProcessOutputResponse);
+}
+
+message RunProcessRequest {
+    string command = 1;
+}
+
+message RunProcessResponse {
+    string processId = 1;
+}
+
+message StopProcessRequest {
+    string processId = 1;
+}
+
+message StopProcessResponse {
+    string status = 1;
+}
+
+message ProcessStatusRequest {
+    string processId = 1;
+}
+
+message ProcessStatusResponse {
+    string status = 1;
+}
+
+message ProcessOutputRequest {
+    string processId = 1;
+}
+
+message ProcessOutputResponse {
+    bytes output = 1;
+}
