@@ -64,14 +64,18 @@ The server and client will enforce TLS version 1.3 for maximum security. The ser
 When generating client certificates we will include the the user's email, in the case of this challenge `shawon@example.com`, in the `subjectAltName` field. This will be used as an additional layer of authentication by the CA to ensure only users with an email matching the allowed subdomain can be validated. Each client will need a client certificate for their user.
 
 ### Scoping Requests
-In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client. The user on the host will match the first part of the email, before the `@`, which will be compared against the email we receive from the client in their certificate in the `subjectAltName` field. 
+In order to scope requests to each client we will create a rule for the domain provided in the `subjectAltName` field of the client certificate. In the case of this challenge we will allow users with the domain `example.com` access to the gRPC methods above.
+
+We will also further scope the stop, query status, and get output methods based on the unique process identifier that is provided. Users will only be able to interact with processes and outputs that are tied to their username, which will be the first part of their email that is passed in via the `subjectAltName` field in the certificate. For example, if my email is `shawon@example.com`, I will only be able to interact with processes that start with `shawon` in the unique process id.
 
 #### Future Improvements
 * Use a certificate provider for the CA instead of a locally generating one
-* Utilize client certificate details to implement more fine grained access
+* Utilize more client certificate details to implement more fine grained access
 * Implement a dedicated secret management solution for private keys, such as Vault or AWS Secret Manager (or any other secure key store)
 * Automate certificate management going forward to remove human error and allow for easier revocation and rotation
 * Add monitoring for certificate expiration and authentication failures
+* Implement an actual authorization scheme such as JWT, Oauth 2.0, etc
+* Use more fine grained groups such as AD, LDAP, or some other management to give more fine grained restrictions to methods for users
 
 ### Library
 The library will primarily utilize the standard library's os package in Go to interact with the Linux operating system and accomplish the actual job management functions.
