@@ -42,7 +42,7 @@ At a high level the API will have the following methods on the localhost using p
 `GetProcessStatus(ProcessStatusRequest)`
 `GetProcessOutput(ProcessOutputRequest)`
 
-The `RunProcess` method will return the process identifier for the command issued to the client, which will be used for the `StopProcess`, `GetProcessStatus`, and `GetProcessOutput` methods.
+The `RunProcess` method will return a process identifier for the command issued to the client, which will be generated using the username, command requested, and a random string. This identifier will then be used for the `StopProcess`, `GetProcessStatus`, and `GetProcessOutput` methods.
 
 ### Future Improvements
 * Run the server in a separate environment, such as kubernetes, which can allow for defining high availability through replicaSets and would move the API out from the domain of the operating system being managed
@@ -53,14 +53,18 @@ The `RunProcess` method will return the process identifier for the command issue
 ## Server Authentication
 
 ### mTLS
-The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a server side certificate and key pair. These certificates and keys will be stored locally for the server.
+The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a two local CA certificates, one for host certificates and one for client certificates.
 
-The server will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
+The host CA certificate will be used to generate a server side certificate and key pair.
+
+The client CA certificate will use the `nameConstraints` extension to allow access only to a specific subdomain. In the case of this challenge it will be `permitted:.example.com`.
+
+The server and client will enforce TLS version 1.3 for maximum security. The server will prefer the TLS13-AES-256-GCM-SHA384 cipher suite to have the best possible encryption standard while maintaining efficient performance. 
+
+When generating client certificates we will include the the user's email, in the case of this challenge `shawon@example.com`, in the `subjectAltName` field. This will be used as an additional layer of authentication by the CA to ensure only users with an email matching the allowed subdomain can be validated. Each client will need a client certificate for their user.
 
 ### Scoping Requests
-In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client. The user on the host will match the first part of the email, before the `@`, which will be compared against the email we receive from the client. 
-
-The client will hard code this for now. Ideally this would be set via a configuration file. 
+In order to scope requests to each client we will create a user for each client, and that will be authenticated against the user in the certificate sent from the client. The user on the host will match the first part of the email, before the `@`, which will be compared against the email we receive from the client in their certificate in the `subjectAltName` field. 
 
 #### Future Improvements
 * Use a certificate provider for the CA instead of a locally generating one
@@ -70,14 +74,20 @@ The client will hard code this for now. Ideally this would be set via a configur
 * Add monitoring for certificate expiration and authentication failures
 
 ### Library
-The library will primarily utilize the builtin os package in Go to interact with the Linux operating system and accomplish the actual job management functions.
+The library will primarily utilize the standard library's os package in Go to interact with the Linux operating system and accomplish the actual job management functions.
 
-The library will primarily utilize the os/exec builtin, with some use of the os/user and base level os builtin packages.
+The library will primarily utilize the standard library's os/exec package, with some use of the os/user and base level os library packages.
 
 ### Output streaming
 In order to reduce overhead each command will pipe output to a file named with the a unique identifier tied to the process. This data will be read from the file when requested. We will check to see if the process is still running to determine whether or not to continually read from and stream data from the file, or serve all the output data at once to the client. 
 
-In the cases where processes are still running we will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
+The flow of this will be something like:
+* Read from the file starting at the first line and stream each line to the client
+* If at any point we reach the end and get an EOF error, check to see if the process is still running
+* * If the process is no longer running, return. 
+* If the process is still running, continue reading and streaming from the file while ignoring EOF errors (but break on any other error)
+
+We will utilize server side streaming from gRPC to serve this data continually to the client until they close the connection or the process finishes.
 
 #### Future Improvements
 * Store output somewhere other than locally on the server, like S3
@@ -102,20 +112,12 @@ We will also have commands for stopping a process and getting the process output
 We will generate a unique identifier for each process, using the username and a generated value, and write the pid to a file named with that id. This way we can track client processes without collisions, while still having something that ties back to the process itself on the host.
 
 ### Client Authentication
-The service will utilize mTLS to authenticate and secure requests. For this implementation we will manually create a single local CA certificate that will be used to generate a client side certificate and key pair. The CA will use the `nameConstraints` extension to allow access only to a specific subdomain. In the case of this challenge it will be `permitted:.example.com`. The CA will be trusted by the server to allow client certificates to connect. These certificates and keys will be stored locally for the client.
+Once the user has been validated we will then check to make sure they are authorized to use the gRPC methods defined above. Using the value in `subAltName` from the client certificate, users in the domain `example.com` will be allowed to run the methods we have defined which will be scoped to the following on the host:
 
-The client will enforce TLS version 1.3 for maximum security. Each client will need a certificate and key pair generated to interact with the server.
-
-When generating client certificates we will include the the user's email, in the case of this challenge `shawon@example.com`, in the `subjectAltName` field. This will be used as an additional layer of authentication by the CA to ensure only users with an email matching the allowed subdomain can be validated. 
-
-Once the user has been validated their access will be scoped to allow the following on the host via group, which their user will be added to:
 * Execute binaries in `/usr/bin` and `/usr/local/bin`
 * Read/Write process output files from the output directory
 
-The user will not have access to read or write to any other directories, or to sudo or other groups.
-
 ### Future Improvements
+* Implement a more robust form of authorization, using something like JWT or Oauth 2.0 to restrict access to methods
 * Create configuration options to allow more robust client side settings
 * Auto generate client certificates from the server instead of relying on users to generate their own
-* Clients should use the user specified in their cert instead of passing one in
-* Utilize a 

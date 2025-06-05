@@ -11,7 +11,6 @@ service ProcessManager {
 
 message RunProcessRequest {
     string command = 1;
-    string user = 2;
 }
 
 message RunProcessResponse {
@@ -20,7 +19,6 @@ message RunProcessResponse {
 
 message StopProcessRequest {
     string processId = 1;
-    string user = 2;
 }
 
 message StopProcessResponse {
@@ -29,7 +27,6 @@ message StopProcessResponse {
 
 message ProcessStatusRequest {
     string processId = 1;
-    string user = 2;
 }
 
 message ProcessStatusResponse {
@@ -38,9 +35,8 @@ message ProcessStatusResponse {
 
 message ProcessOutputRequest {
     string processId = 1;
-    string user = 2;
 }
 
 message ProcessOutputResponse {
-    string output = 1;
+    bytes output = 1;
 }
